@@ -19,7 +19,7 @@ fn part_one(file_contents: &str) {
             current_cals += line.parse::<u32>().unwrap();
         }
     }
-    println!("{}", max_cals);
+    println!("{max_cals}");
 }
 
 fn part_two(file_contents: &str) {
@@ -34,6 +34,6 @@ fn part_two(file_contents: &str) {
         }
     }
     let total_top_three: u32 = calories.iter().rev().take(3).sum();
-    println!("{}", total_top_three);
+    println!("{total_top_three}");
 }
 
