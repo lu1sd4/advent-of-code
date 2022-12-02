@@ -16,12 +16,20 @@ fn choice_to_usize(choice: char) -> usize {
 }
 
 fn round_score_one(first: char, second: char) -> u16 {
-    let mat:[[u16;3];3] = [[4, 1, 7], [8, 5, 2], [3, 9, 6]];
+    let mat:[[u16;3];3] = [
+        [4, 1, 7],
+        [8, 5, 2],
+        [3, 9, 6]
+    ];
     return mat[choice_to_usize(second)][choice_to_usize(first)];
 }
 
 fn round_score_two(first: char, second: char) -> u16 {
-    let mat: [[u16;3];3] = [[3, 4, 8], [1, 5, 9], [2, 6, 7]];
+    let mat: [[u16;3];3] = [
+        [3, 4, 8],
+        [1, 5, 9],
+        [2, 6, 7
+    ];
     return mat[choice_to_usize(first)][choice_to_usize(second)];   
 }
 
