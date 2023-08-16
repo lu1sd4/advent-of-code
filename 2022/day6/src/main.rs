@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-
 fn main() {
     let file_contents = include_str!("input");
     part_one(file_contents);
