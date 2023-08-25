@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 struct FileSystemTree {
     nodes: Vec<FileTreeNode>,
     current: usize,
@@ -207,12 +209,10 @@ impl FsOutputProcessor {
             } else if GoTo::matches_string(line) {
                 GoTo::from_line(line).execute(&mut self.file_tree);
             } else if Ls::matches_string(line) {
-                let mut instance_lines: Vec<String> = Vec::new();
-                while Option::is_some(&lines_iter.peek())
-                    && !FsOutputProcessor::line_is_command(lines_iter.peek().unwrap())
-                {
-                    instance_lines.push(String::from(lines_iter.next().unwrap()));
-                }
+                let instance_lines: Vec<String> = lines_iter
+                    .peeking_take_while(|&line| !FsOutputProcessor::line_is_command(line))
+                    .map(|line| line.to_string())
+                    .collect();
                 Ls {
                     lines: instance_lines,
                 }
