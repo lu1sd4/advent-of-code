@@ -28,7 +28,7 @@ impl Ord for List {
       (List::Value(a), List::Value(b)) => a.cmp(b),
       (List::Value(a), List::Nested(_)) => List::Nested(vec![List::Value(*a)]).cmp(other),
       (List::Nested(_), List::Value(b)) => self.cmp(&List::Nested(vec![List::Value(*b)])),
-      (List::Nested(a), List::Nested(other_list)) => a.cmp(other_list),
+      (List::Nested(a), List::Nested(b)) => a.cmp(b),
     }
   }
 }
