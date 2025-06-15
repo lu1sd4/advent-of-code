@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{digit1, newline};
+use nom::character::complete::{newline, u32};
 use nom::multi::{separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, separated_pair};
 use nom::Parser;
@@ -25,71 +25,36 @@ impl PartialOrd for List {
 impl Ord for List {
   fn cmp(&self, other: &Self) -> Ordering {
     match (self, other) {
-      (List::Value(self_value), List::Value(other_value)) => self_value.cmp(other_value),
-      (List::Value(self_value), List::Nested(_)) => {
-        List::Nested(vec![List::Value(*self_value)]).cmp(other)
-      }
-      (List::Nested(_), List::Value(other_value)) => {
-        self.cmp(&List::Nested(vec![List::Value(*other_value)]))
-      }
-      (List::Nested(self_list), List::Nested(other_list)) => {
-        let mut self_index = 0;
-        let mut other_index = 0;
-        while self_index < self_list.len() && other_index < other_list.len() {
-          match self_list[self_index].cmp(&other_list[other_index]) {
-            Ordering::Equal => {
-              self_index += 1;
-              other_index += 1;
-            }
-            cmp_result => return cmp_result,
-          }
-        }
-        self_list.len().cmp(&other_list.len())
-      }
+      (List::Value(a), List::Value(b)) => a.cmp(b),
+      (List::Value(a), List::Nested(_)) => List::Nested(vec![List::Value(*a)]).cmp(other),
+      (List::Nested(_), List::Value(b)) => self.cmp(&List::Nested(vec![List::Value(*b)])),
+      (List::Nested(a), List::Nested(other_list)) => a.cmp(other_list),
     }
   }
 }
 
-fn parse_number_element(input: &str) -> IResult<&str, List> {
-  map(digit1, |s: &str| List::Value(s.parse::<u32>().unwrap())).parse(input)
-}
-
-fn parse_element(input: &str) -> IResult<&str, List> {
-  alt((parse_number_element, parse_list_element)).parse(input)
-}
-
-fn parse_list_element(input: &str) -> IResult<&str, List> {
-  map(
-    delimited(tag("["), separated_list0(tag(","), parse_element), tag("]")),
-    |l: Vec<List>| List::Nested(l),
-  )
+fn list(input: &str) -> IResult<&str, List> {
+  alt((
+    map(
+      delimited(tag("["), separated_list0(tag(","), list), tag("]")),
+      |l| List::Nested(l),
+    ),
+    map(u32, |n| List::Value(n)),
+  ))
   .parse(input)
 }
 
 fn parse_list(input: &str) -> List {
-  let (_, list) = parse_list_element(input).unwrap();
+  let (_, list) = list(input).unwrap();
   return list;
 }
 
-fn parse_pairs(input: &str) -> Vec<(List, List)> {
-  let (_, result) = separated_list1(
-    pair(newline, newline),
-    separated_pair(parse_list_element, newline, parse_list_element),
-  )
-  .parse(input)
-  .unwrap();
-  return result;
-}
-
-fn parse_all_lists(input: &str) -> Vec<List> {
-  let (_, result) = separated_list1(many1(newline), parse_list_element)
-    .parse(input)
-    .unwrap();
-  return result;
+fn parse_pairs(input: &str) -> IResult<&str, Vec<(List, List)>> {
+  separated_list1(pair(newline, newline), separated_pair(list, newline, list)).parse(input)
 }
 
 fn part_one(input: &str) -> u32 {
-  let pairs = parse_pairs(input);
+  let (_, pairs) = parse_pairs(input).unwrap();
   pairs
     .iter()
     .enumerate()
@@ -100,18 +65,20 @@ fn part_one(input: &str) -> u32 {
 }
 
 fn part_two(input: &str) -> u32 {
-  let list_a = "[[2]]";
-  let list_b = "[[6]]";
-  let altered_input = String::from(input) + "\n" + list_a + "\n" + list_b;
-  let mut lists = parse_all_lists(altered_input.as_str());
-  let divider_packet_a = parse_list(list_a);
-  let divider_packet_b = parse_list(list_b);
+  let (_, pairs) = parse_pairs(input).unwrap();
+  let divider_packet_a = parse_list("[[2]]");
+  let divider_packet_b = parse_list("[[6]]");
+  let mut lists: Vec<&List> = pairs
+    .iter()
+    .flat_map(|(l, r)| [l, r])
+    .chain([&divider_packet_a, &divider_packet_b])
+    .collect();
   lists.sort();
   lists
     .iter()
     .enumerate()
     .map(|(i, list)| (i + 1, list))
-    .filter(|(_, list)| **list == divider_packet_a || **list == divider_packet_b)
+    .filter(|(_, list)| ***list == divider_packet_a || ***list == divider_packet_b)
     .map(|(i, _)| u32::try_from(i).unwrap())
     .product()
 }
@@ -217,5 +184,13 @@ mod test {
   #[test]
   fn part_two_example() {
     assert_eq!(part_two(INPUT), 140);
+  }
+
+  #[test]
+  fn what() {
+    let v = vec![1, 1, 3, 1];
+    let w = vec![1, 1, 5, 1, 1];
+    dbg!(v.cmp(&w));
+    assert_eq!(v < w, true);
   }
 }
