@@ -18,7 +18,7 @@ impl Eq for List {}
 
 impl PartialOrd for List {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    return Some(self.cmp(&other));
+    Some(self.cmp(&other))
   }
 }
 
@@ -58,11 +58,9 @@ fn part_one(input: &str) -> usize {
   pairs
     .iter()
     .enumerate()
-    .filter_map(|(i, (l, r))| {
-      match l.cmp(r) {
-        Ordering::Less => Some(i + 1),
-        _ => None,
-      }
+    .filter_map(|(i, (l, r))| match l.cmp(r) {
+      Ordering::Less => Some(i + 1),
+      _ => None,
     })
     .sum()
 }
@@ -80,12 +78,8 @@ fn part_two(input: &str) -> usize {
   lists
     .iter()
     .enumerate()
-    .filter_map(|(i, list)| {
-      if **list == divider_packet_a || **list == divider_packet_b {
-        return Some(i + 1)
-      }
-      None
-    })
+    .filter(|(_, &list)| list == &divider_packet_a || list == &divider_packet_b)
+    .map(|(i, _)| i + 1)
     .product()
 }
 
