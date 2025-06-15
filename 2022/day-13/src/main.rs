@@ -53,18 +53,21 @@ fn parse_pairs(input: &str) -> IResult<&str, Vec<(List, List)>> {
   separated_list1(pair(newline, newline), separated_pair(list, newline, list)).parse(input)
 }
 
-fn part_one(input: &str) -> u32 {
+fn part_one(input: &str) -> usize {
   let (_, pairs) = parse_pairs(input).unwrap();
   pairs
     .iter()
     .enumerate()
-    .map(|(i, pair)| (i + 1, pair))
-    .filter(|(_, (l, r))| l < r)
-    .map(|(i, _)| u32::try_from(i).unwrap())
+    .filter_map(|(i, (l, r))| {
+      match l.cmp(r) {
+        Ordering::Less => Some(i + 1),
+        _ => None,
+      }
+    })
     .sum()
 }
 
-fn part_two(input: &str) -> u32 {
+fn part_two(input: &str) -> usize {
   let (_, pairs) = parse_pairs(input).unwrap();
   let divider_packet_a = parse_list("[[2]]");
   let divider_packet_b = parse_list("[[6]]");
@@ -77,9 +80,12 @@ fn part_two(input: &str) -> u32 {
   lists
     .iter()
     .enumerate()
-    .map(|(i, list)| (i + 1, list))
-    .filter(|(_, list)| ***list == divider_packet_a || ***list == divider_packet_b)
-    .map(|(i, _)| u32::try_from(i).unwrap())
+    .filter_map(|(i, list)| {
+      if **list == divider_packet_a || **list == divider_packet_b {
+        return Some(i + 1)
+      }
+      None
+    })
     .product()
 }
 
