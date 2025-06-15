@@ -6,7 +6,7 @@ use nom::character::complete::{newline, u32};
 use nom::multi::{separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, separated_pair};
 use nom::Parser;
-use nom::{combinator::map, multi::many1, IResult};
+use nom::{combinator::map, IResult};
 
 #[derive(Debug, Clone, PartialEq)]
 enum List {
