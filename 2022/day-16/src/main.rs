@@ -9,185 +9,215 @@ use nom::{
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-#[derive(Debug)]
-struct Network<'a> {
-  valves: HashMap<&'a str, Valve<'a>>,
-  non_zero_valves: Vec<&'a str>,
-  distance_matrix: HashMap<&'a str, HashMap<&'a str, i32>>,
-}
-
-#[derive(Debug)]
-struct Valve<'a> {
-  name: &'a str,
-  flow_rate: i32,
-  neighbors: Vec<&'a str>,
-}
-
 #[derive(Debug, Clone)]
-struct Path<'a> {
-  total_flow: i32,
-  open_valves: Vec<&'a str>,
-  open_valves_set: HashSet<&'a str>,
+struct Valve {
+  name: String,
+  flow_rate: u32,
+  tunnels: Vec<String>,
+  mapped_tunnels: Vec<usize>,
 }
 
-impl<'a> Path<'a> {
-  fn empty_path() -> Self {
-    Self {
-      total_flow: 0,
-      open_valves: Vec::new(),
-      open_valves_set: HashSet::new(),
-    }
-  }
+fn valve_name(input: &str) -> IResult<&str, String> {
+  map(take(2usize), String::from).parse(input)
 }
 
-fn floyd_warshall<'a>(
-  valves: &HashMap<&'a str, Valve<'a>>,
-) -> HashMap<&'a str, HashMap<&'a str, i32>> {
-  let mut distances: HashMap<&'a str, HashMap<&'a str, i32>> = HashMap::new();
-  for &i in valves.keys() {
-    for &j in valves.keys() {
-      distances.entry(i).or_default().insert(
-        j,
-        if i == j {
-          0
-        } else if valves[i].neighbors.contains(&j) {
-          1
-        } else {
-          i32::MAX / 2
-        },
-      );
-    }
-  }
-  for &k in valves.keys() {
-    for &i in valves.keys() {
-      for &j in valves.keys() {
-        let ik = distances[i][k];
-        let kj = distances[k][j];
-        let ij = distances[i][j];
-        if ik + kj < ij {
-          distances.get_mut(i).unwrap().insert(j, ik + kj);
-        }
-      }
-    }
-  }
-  return distances;
-}
-
-impl<'a> Network<'a> {
-  fn make_network(valves: HashMap<&'a str, Valve<'a>>) -> Self {
-    let non_zero_valves: Vec<&str> = valves
-      .values()
-      .filter(|v| v.flow_rate > 0)
-      .map(|v| v.name)
-      .collect();
-    let distance_matrix = floyd_warshall(&valves);
-    return Self {
-      valves,
-      non_zero_valves,
-      distance_matrix,
-    };
-  }
-  fn depth_first_search(
-    &self,
-    current_valve: &'a str,
-    depth_left: i32,
-    current_path: &mut Path<'a>,
-  ) -> Vec<Path<'a>> {
-    let mut paths: Vec<Path> = vec![current_path.clone()];
-    let mut next_depth_left: i32;
-    for &next_valve in &self.non_zero_valves {
-      next_depth_left = depth_left - self.distance_matrix[current_valve][next_valve] - 1;
-      if current_path.open_valves_set.contains(next_valve) || next_depth_left < 0 {
-        continue;
-      }
-      current_path.open_valves.push(next_valve);
-      current_path.open_valves_set.insert(next_valve);
-      current_path.total_flow += next_depth_left * self.valves[next_valve].flow_rate;
-      paths.extend(self.depth_first_search(next_valve, next_depth_left, current_path));
-      current_path.total_flow -= next_depth_left * self.valves[next_valve].flow_rate;
-      current_path.open_valves.pop();
-      current_path.open_valves_set.remove(next_valve);
-    }
-    return paths;
-  }
-  fn simulate_all_paths(&self, minutes: i32) -> Vec<Path> {
-    return self.depth_first_search("AA", minutes, &mut Path::empty_path());
-  }
-}
-
-fn valve_name(input: &str) -> IResult<&str, &str> {
-  take(2usize).parse(input)
-}
-
-fn valve(input: &str) -> IResult<&str, Valve> {
-  map(
-    (
-      preceded(tag("Valve "), valve_name),
-      preceded(tag(" has flow rate="), nom::character::complete::i32),
-      preceded(
-        alt((
-          tag("; tunnels lead to valves "),
-          tag("; tunnel leads to valve "),
-        )),
-        separated_list1(tag(", "), valve_name),
+fn valves(input: &str) -> IResult<&str, Vec<Valve>> {
+  separated_list1(
+    newline,
+    map(
+      (
+        preceded(tag("Valve "), valve_name),
+        preceded(tag(" has flow rate="), nom::character::complete::u32),
+        preceded(
+          alt((
+            tag("; tunnels lead to valves "),
+            tag("; tunnel leads to valve "),
+          )),
+          separated_list1(tag(", "), valve_name),
+        ),
       ),
+      |(name, flow_rate, tunnels)| Valve {
+        name,
+        flow_rate,
+        tunnels,
+        mapped_tunnels: Vec::new(),
+      },
     ),
-    |(name, flow_rate, neighbors)| Valve {
-      name,
-      flow_rate,
-      neighbors,
-    },
   )
   .parse(input)
 }
 
-fn valves(input: &str) -> IResult<&str, Vec<Valve>> {
-  separated_list1(newline, valve).parse(input)
-}
-
-fn max_flow_non_crossing_paths(paths: &Vec<Path>) -> i32 {
-  let filtered: Vec<_> = paths.iter().filter(|p| !p.open_valves.is_empty()).collect();
-
-  filtered
+fn make_adjacency_matrix(valves: &Vec<Valve>) -> Vec<Vec<u32>> {
+  let mut adjacency_matrix = vec![vec![u32::MAX / 2; valves.len()]; valves.len()];
+  valves
     .iter()
     .enumerate()
-    .flat_map(|(i, my_path)| {
-      filtered
+    .flat_map(|(i, v)| v.mapped_tunnels.iter().map(move |&j| (i, j)))
+    .for_each(|(i, j)| adjacency_matrix[i][j] = 1);
+  adjacency_matrix
+}
+
+fn floyd_warshall(adjacency_matrix: &Vec<Vec<u32>>) -> Vec<Vec<u32>> {
+  let mut distance_matrix = adjacency_matrix.clone();
+  for k in 0..distance_matrix.len() {
+    for i in 0..distance_matrix.len() {
+      for j in 0..distance_matrix.len() {
+        if distance_matrix[i][k] + distance_matrix[k][j] < distance_matrix[i][j] {
+          distance_matrix[i][j] = distance_matrix[i][k] + distance_matrix[k][j];
+        }
+      }
+    }
+  }
+  distance_matrix
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+struct BitMask {
+  bits: u64
+}
+
+impl BitMask {
+  pub fn new() -> Self {
+      Self { bits: 0 }
+  }
+
+  fn is_bit_set(&self, index: usize) -> bool {
+    self.bits & (1 << index) != 0
+  }
+
+  fn with_bit_set(&self, index: usize) -> BitMask {
+    BitMask { bits: self.bits | (1 << index) }
+  }
+
+  fn overlaps(&self, other: &BitMask) -> bool {
+    self.bits & other.bits != 0
+  }
+}
+
+fn depth_first_search(
+  current_valve: usize,
+  open_valves: BitMask,
+  current_flow: u32,
+  time_remaining: u32,
+  valves: &Vec<Valve>,
+  distance_matrix: &Vec<Vec<u32>>,
+  candidate_valves: &Vec<usize>,
+  open_valves_flows: &mut HashMap<BitMask, u32>,
+) -> u32 {
+  let mut flow = current_flow;
+
+  open_valves_flows
+    .entry(open_valves)
+    .and_modify(|v| {
+      if flow > *v {
+        *v = flow;
+      }
+    })
+    .or_insert(flow);
+
+  for &next_valve in candidate_valves {
+    let time_left_after_moving = time_remaining
+      .checked_sub(distance_matrix[current_valve][next_valve] + 1)
+      .unwrap_or(0);
+    if time_left_after_moving == 0 || open_valves.is_bit_set(next_valve) {
+      continue;
+    }
+    flow = flow.max(depth_first_search(
+      next_valve,
+      open_valves.with_bit_set(next_valve),
+      current_flow + (time_left_after_moving * valves[next_valve].flow_rate),
+      time_left_after_moving,
+      valves,
+      distance_matrix,
+      candidate_valves,
+      open_valves_flows,
+    ))
+  }
+
+  flow
+}
+
+fn simulate_all_paths(
+  valves: &Vec<Valve>,
+  distance_matrix: &Vec<Vec<u32>>,
+  minutes: u32,
+) -> (HashMap<BitMask, u32>, u32) {
+  let aa_index = valves
+    .iter()
+    .position(|v| v.name == "AA")
+    .expect("no AA valve?");
+
+  let open_valves: BitMask = BitMask::new();
+  let candidate_valves: Vec<usize> = valves
+    .iter()
+    .enumerate()
+    .filter(|(_, v)| v.flow_rate > 0)
+    .map(|(i, _)| i)
+    .collect();
+  let mut open_valves_flows: HashMap<BitMask, u32> = HashMap::new();
+
+  let max_flow = depth_first_search(
+    aa_index,
+    open_valves,
+    0,
+    minutes,
+    valves,
+    distance_matrix,
+    &candidate_valves,
+    &mut open_valves_flows,
+  );
+
+  (open_valves_flows, max_flow)
+}
+
+fn max_flow_two_disjoint_valve_sets(open_valves: &HashMap<BitMask, u32>) -> u32 {
+  open_valves
+    .iter()
+    .enumerate()
+    .filter_map(|(i, (a, a_flow))| {
+      open_valves
         .iter()
         .skip(i + 1)
-        .filter_map(move |elephant_path| {
-          if my_path
-            .open_valves_set
-            .is_disjoint(&elephant_path.open_valves_set)
-          {
-            Some(my_path.total_flow + elephant_path.total_flow)
-          } else {
-            None
-          }
-        })
+        .filter(|(b, _)| !a.overlaps(b))
+        .map(|(_, b_flow)| a_flow + b_flow)
+        .max()
     })
     .max()
-    .expect("no max flow?")
+    .unwrap_or(0)
 }
 
-fn part_one(input: &str) -> i32 {
-  let (_, valves_list) = valves(input).unwrap();
-  let valves_map: HashMap<&str, Valve> = valves_list.into_iter().map(|v| (v.name, v)).collect();
-  let network = Network::make_network(valves_map);
-  let paths = network.simulate_all_paths(30);
-  paths
+fn parse_valves(input: &str) -> Vec<Valve> {
+  let (_, mut valves) = valves(input).unwrap();
+
+  let valves_map: HashMap<String, usize> = valves
     .iter()
-    .map(|p| p.total_flow)
-    .max()
-    .expect("no max flow?")
+    .enumerate()
+    .map(|(i, v)| (v.name.clone(), i))
+    .collect();
+
+  valves.iter_mut().for_each(|v| {
+    v.tunnels
+      .iter()
+      .for_each(|t| v.mapped_tunnels.push(*valves_map.get(t).unwrap()))
+  });
+
+  valves
 }
 
-fn part_two(input: &str) -> i32 {
-  let (_, valves_list) = valves(input).unwrap();
-  let valves_map: HashMap<&str, Valve> = valves_list.into_iter().map(|v| (v.name, v)).collect();
-  let network = Network::make_network(valves_map);
-  let paths = network.simulate_all_paths(26);
-  max_flow_non_crossing_paths(&paths) // slowwwwww
+fn part_one(input: &str) -> u32 {
+  let valves = parse_valves(input);
+  let adjacency_matrix = make_adjacency_matrix(&valves);
+  let distance_matrix = floyd_warshall(&adjacency_matrix);
+  let (_, max_flow) = simulate_all_paths(&valves, &distance_matrix, 30);
+  max_flow
+}
+
+fn part_two(input: &str) -> u32 {
+  let valves = parse_valves(input);
+  let adjacency_matrix = make_adjacency_matrix(&valves);
+  let distance_matrix = floyd_warshall(&adjacency_matrix);
+  let (valves_map, _) = simulate_all_paths(&valves, &distance_matrix, 26);
+  max_flow_two_disjoint_valve_sets(&valves_map)
 }
 
 fn main() {
