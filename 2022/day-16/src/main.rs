@@ -73,12 +73,12 @@ fn floyd_warshall(adjacency_matrix: &Vec<Vec<u32>>) -> Vec<Vec<u32>> {
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 struct BitMask {
-  bits: u64
+  bits: u64,
 }
 
 impl BitMask {
   pub fn new() -> Self {
-      Self { bits: 0 }
+    Self { bits: 0 }
   }
 
   fn is_bit_set(&self, index: usize) -> bool {
@@ -86,7 +86,9 @@ impl BitMask {
   }
 
   fn with_bit_set(&self, index: usize) -> BitMask {
-    BitMask { bits: self.bits | (1 << index) }
+    BitMask {
+      bits: self.bits | (1 << index),
+    }
   }
 
   fn overlaps(&self, other: &BitMask) -> bool {
