@@ -68,8 +68,7 @@ impl RockType {
 
 #[derive(Debug)]
 struct Rock {
-  points: Vec<ShapePoint>,
-  rock_type: RockType,
+  points: Vec<ShapePoint>
 }
 
 impl Rock {
@@ -81,7 +80,7 @@ impl Rock {
       .map(Into::into)
       .collect();
 
-    Self { points, rock_type }
+    Self { points }
   }
   fn shift_down(&mut self) {
     self.points.iter_mut().for_each(|point| point.y -= 1);
@@ -215,7 +214,10 @@ impl Chamber {
     if !loop_found {
       return self.rows_height();
     }
-    let pattern_start_heights = self.state_cache.get(&current_state).expect("");
+    let pattern_start_heights = self
+      .state_cache
+      .get(&current_state)
+      .expect("loop found = true means the state is in the map");
     let bottom_height = self.rows_height();
     let pattern_height_rows = bottom_height - pattern_start_heights.rows;
     let pattern_rocks = rock_count - pattern_start_heights.rocks;
@@ -352,26 +354,6 @@ impl Chamber {
         }
       }
     }
-  }
-  fn draw(&self) -> String {
-    self
-      .rows
-      .iter()
-      .rev()
-      .map(|row| {
-        row
-          .iter()
-          .map(|&has_rock| {
-            if has_rock {
-              return '#';
-            } else {
-              return '.';
-            }
-          })
-          .collect::<String>()
-      })
-      .collect::<Vec<String>>()
-      .join("\n")
   }
 }
 
