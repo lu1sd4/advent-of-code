@@ -337,7 +337,8 @@ impl Chamber {
       WindDirection::Right => rock.move_right(),
     }
 
-    if self.collides(rock) { //reverse if rock collision
+    if self.collides(rock) {
+      // reverse if rock collision
       match direction {
         WindDirection::Left => rock.move_right(),
         WindDirection::Right => rock.move_left(),
