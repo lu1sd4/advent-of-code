@@ -1,7 +1,6 @@
 use std::{
   collections::HashMap,
   iter::{Cycle, Peekable},
-  thread::current,
   time::Instant,
   vec::IntoIter,
 };
