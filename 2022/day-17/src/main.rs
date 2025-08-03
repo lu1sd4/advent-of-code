@@ -206,7 +206,10 @@ impl Chamber {
       } else {
         self.state_cache.insert(
           current_state,
-          StateHeights { rows: self.rows_height(), rocks: rock_count }
+          StateHeights {
+            rows: self.rows_height(),
+            rocks: rock_count,
+          },
         );
       }
     }
