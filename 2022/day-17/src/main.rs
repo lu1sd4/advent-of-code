@@ -274,7 +274,6 @@ impl Chamber {
       min_peak = min_peak.min(peaks[col]);
     }
 
-    // Make peaks relative to the minimum peak
     for peak in &mut peaks {
       *peak -= min_peak;
     }
