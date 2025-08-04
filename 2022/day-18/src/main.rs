@@ -18,7 +18,7 @@ impl Space {
   fn from(positions: Vec<Position>) -> Self {
     let mut cells = [[[Cell::new(Material::Air); L]; L]; L];
 
-    for position in positions {
+    for position in &positions {
       cells[position.x + 1][position.y + 1][position.z + 1] = Cell::new(Material::Droplet);
     }
 
@@ -69,7 +69,6 @@ impl Space {
     let mut stack = vec![start];
     let mut result = HashSet::new();
     let search_material = self.cells[start[0]][start[1]][start[2]].material;
-    stack.push(start);
     while let Some([x, y, z]) = stack.pop() {
       let cell = self.cells[x][y][z];
       if cell.material == search_material && result.insert([x, y, z]) {
@@ -93,7 +92,6 @@ enum Material {
   Air,
 }
 
-#[derive(Clone, Copy)]
 struct Position {
   x: usize,
   y: usize,
