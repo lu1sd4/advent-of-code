@@ -4,71 +4,73 @@ use nom::{
 };
 use std::{collections::HashSet, time::Instant};
 
+const L: usize = 22;
+
+fn bounded_add(lhs: usize, rhs: usize, max: usize) -> Option<usize> {
+  let result = lhs.checked_add(rhs)?;
+  if result < max {
+    Some(result)
+  } else {
+    None
+  }
+}
+
 struct Space {
-  slots: Vec<Vec<Vec<Option<Cell>>>>,
-  dimensions: [usize; 3],
+  cells: [[[Cell; L]; L]; L],
 }
 
 impl Space {
   fn from(positions: Vec<Position>) -> Self {
-    let max_x = positions.iter().map(|d| d.x).max().unwrap_or(0) + 1 + 2;
-    let max_y = positions.iter().map(|d| d.y).max().unwrap_or(0) + 1 + 2;
-    let max_z = positions.iter().map(|d| d.z).max().unwrap_or(0) + 1 + 2;
-
-    let dimensions = [max_x, max_y, max_z];
-
-    let mut slots: Vec<Vec<Vec<Option<Cell>>>> = vec![vec![vec![None; max_z]; max_y]; max_x];
+    let mut cells = [[[Cell::new(Material::Air); L]; L]; L];
 
     for position in positions {
-      slots[position.x + 1][position.y + 1][position.z + 1] =
-        Some(Cell::from(position.offset_by(1), Material::Droplet));
-    }
-
-    for x in 0..max_x {
-      for y in 0..max_y {
-        for z in 0..max_z {
-          if let None = slots[x][y][z] {
-            slots[x][y][z] = Some(Cell::new(x, y, z, Material::Air));
-          }
-        }
-      }
+      cells[position.x + 1][position.y + 1][position.z + 1] = Cell::new(Material::Droplet);
     }
 
     let mut updates = Vec::new();
 
-    for x in 0..max_x {
+    for x in 0..L {
       // calculate opposite contact surfaces
-      for y in 0..max_y {
-        for z in 0..max_z {
-          if let Some(cell) = &slots[x][y][z] {
-            for [adj_x, adj_y, adj_z] in cell.all_adjacent_positions() {
-              if adj_x < max_x && adj_y < max_y && adj_z < max_z {
-                if let Some(adj_cell) = &slots[adj_x][adj_y][adj_z] {
-                  if cell.material != adj_cell.material {
-                    updates.push((x, y, z));
-                  }
-                }
-              }
+      for y in 0..L {
+        for z in 0..L {
+          for [adj_x, adj_y, adj_z] in Space::all_adjacent_positions([x, y, z]) {
+            if &cells[x][y][z].material != &cells[adj_x][adj_y][adj_z].material {
+              updates.push((x, y, z));
             }
           }
         }
       }
     }
 
-    for (x, y, z) in updates {
-      if let Some(cell) = slots[x][y][z].as_mut() {
-        cell.opposite_neighbors += 1;
-      }
+    for (x, y, z) in &mut updates {
+      cells[*x][*y][*z].opposite_neighbors += 1;
     }
 
-    Self { slots, dimensions }
+    Self { cells }
+  }
+  fn all_adjacent_positions(position: [usize; 3]) -> impl Iterator<Item = [usize; 3]> {
+    [
+      bounded_add(position[0], 1, L).map(|x| [x, position[1], position[2]]),
+      bounded_add(position[1], 1, L).map(|y| [position[0], y, position[2]]),
+      bounded_add(position[2], 1, L).map(|z| [position[0], position[1], z]),
+      position[0]
+        .checked_sub(1)
+        .map(|x| [x, position[1], position[2]]),
+      position[1]
+        .checked_sub(1)
+        .map(|y| [position[0], y, position[2]]),
+      position[2]
+        .checked_sub(1)
+        .map(|z| [position[0], position[1], z]),
+    ]
+    .into_iter()
+    .flatten()
   }
   fn droplet_sides(&self) -> u64 {
     self
-      .slots
+      .cells
       .iter() // rows
       .flat_map(|col| col.iter().flat_map(|layer| layer.iter()))
-      .filter_map(|cell| cell.as_ref())
       .filter(|cell| cell.material == Material::Droplet)
       .map(|droplet| droplet.opposite_neighbors)
       .sum()
@@ -76,24 +78,16 @@ impl Space {
   fn connected_positions_same_material(&self, start: [usize; 3]) -> HashSet<[usize; 3]> {
     let mut stack: Vec<[usize; 3]> = Vec::new();
     let mut result: HashSet<[usize; 3]> = HashSet::new();
-    let search_material = self.slots[start[0]][start[1]][start[2]]
-      .expect("no cell at start position?")
-      .material;
-    let [max_x, max_y, max_z] = self.dimensions;
+    let search_material = self.cells[start[0]][start[1]][start[2]].material;
     stack.push(start);
     while !stack.is_empty() {
       let [x, y, z] = stack.pop().expect("stack is empty?");
-      if let Some(cell) = &self.slots[x][y][z] {
-        if cell.material == search_material {
-          result.insert([cell.x, cell.y, cell.z]);
-          for [adj_x, adj_y, adj_z] in cell.all_adjacent_positions() {
-            if adj_x < max_x
-              && adj_y < max_y
-              && adj_z < max_z
-              && !result.contains(&[adj_x, adj_y, adj_z])
-            {
-              stack.push([adj_x, adj_y, adj_z]);
-            }
+      let cell = self.cells[x][y][z];
+      if cell.material == search_material {
+        result.insert([x, y, z]);
+        for [adj_x, adj_y, adj_z] in Space::all_adjacent_positions([x, y, z]) {
+          if !result.contains(&[adj_x, adj_y, adj_z]) {
+            stack.push([adj_x, adj_y, adj_z]);
           }
         }
       }
@@ -104,8 +98,7 @@ impl Space {
     let exterior_air_cells = self.connected_positions_same_material([0, 0, 0]);
     exterior_air_cells
       .iter()
-      .map(|[x, y, z]| &self.slots[*x][*y][*z])
-      .filter_map(|cell| cell.as_ref())
+      .map(|[x, y, z]| &self.cells[*x][*y][*z])
       .map(|air_block| air_block.opposite_neighbors)
       .sum()
   }
@@ -124,64 +117,18 @@ struct Position {
   z: usize,
 }
 
-impl Position {
-  fn offset_by(&self, amount: usize) -> Position {
-    return Position {
-      x: self.x + amount,
-      y: self.y + amount,
-      z: self.z + amount,
-    };
-  }
-}
-
 #[derive(Debug, Clone, Copy)]
 struct Cell {
-  x: usize,
-  y: usize,
-  z: usize,
   opposite_neighbors: u64,
   material: Material,
 }
 
 impl Cell {
-  fn new(x: usize, y: usize, z: usize, material: Material) -> Self {
+  fn new(material: Material) -> Self {
     Self {
-      x,
-      y,
-      z,
       opposite_neighbors: 0,
       material,
     }
-  }
-  fn from(position: Position, material: Material) -> Self {
-    Self::new(position.x, position.y, position.z, material)
-  }
-  fn previous_adjacent_positions(&self) -> Vec<[usize; 3]> {
-    let mut positions: Vec<[usize; 3]> = Vec::new();
-    if let Some(adjacent_x) = self.x.checked_sub(1) {
-      positions.push([adjacent_x, self.y, self.z]);
-    }
-    if let Some(adjacent_y) = self.y.checked_sub(1) {
-      positions.push([self.x, adjacent_y, self.z]);
-    }
-    if let Some(adjacent_z) = self.z.checked_sub(1) {
-      positions.push([self.x, self.y, adjacent_z]);
-    }
-    positions
-  }
-  fn all_adjacent_positions(&self) -> Vec<[usize; 3]> {
-    let mut positions: Vec<[usize; 3]> = Vec::new();
-    if let Some(adjacent_x) = self.x.checked_add(1) {
-      positions.push([adjacent_x, self.y, self.z]);
-    }
-    if let Some(adjacent_y) = self.y.checked_add(1) {
-      positions.push([self.x, adjacent_y, self.z]);
-    }
-    if let Some(adjacent_z) = self.z.checked_add(1) {
-      positions.push([self.x, self.y, adjacent_z]);
-    }
-    positions.append(&mut self.previous_adjacent_positions());
-    positions
   }
 }
 
