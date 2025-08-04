@@ -22,23 +22,17 @@ impl Space {
       cells[position.x + 1][position.y + 1][position.z + 1] = Cell::new(Material::Droplet);
     }
 
-    let mut updates = Vec::new();
-
     for x in 0..L {
       // calculate opposite contact surfaces
       for y in 0..L {
         for z in 0..L {
           for [adj_x, adj_y, adj_z] in Self::all_adjacent_positions([x, y, z]) {
             if cells[x][y][z].material != cells[adj_x][adj_y][adj_z].material {
-              updates.push((x, y, z));
+              cells[x][y][z].opposite_neighbors += 1;
             }
           }
         }
       }
-    }
-
-    for (x, y, z) in updates {
-      cells[x][y][z].opposite_neighbors += 1;
     }
 
     Self { cells }
