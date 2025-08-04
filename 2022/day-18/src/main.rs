@@ -7,12 +7,7 @@ use std::{collections::HashSet, time::Instant};
 const L: usize = 22;
 
 fn bounded_add(lhs: usize, rhs: usize, max: usize) -> Option<usize> {
-  let result = lhs.checked_add(rhs)?;
-  if result < max {
-    Some(result)
-  } else {
-    None
-  }
+  lhs.checked_add(rhs).filter(|&result| result < max)
 }
 
 struct Space {
@@ -33,8 +28,8 @@ impl Space {
       // calculate opposite contact surfaces
       for y in 0..L {
         for z in 0..L {
-          for [adj_x, adj_y, adj_z] in Space::all_adjacent_positions([x, y, z]) {
-            if &cells[x][y][z].material != &cells[adj_x][adj_y][adj_z].material {
+          for [adj_x, adj_y, adj_z] in Self::all_adjacent_positions([x, y, z]) {
+            if cells[x][y][z].material != cells[adj_x][adj_y][adj_z].material {
               updates.push((x, y, z));
             }
           }
@@ -42,8 +37,8 @@ impl Space {
       }
     }
 
-    for (x, y, z) in &mut updates {
-      cells[*x][*y][*z].opposite_neighbors += 1;
+    for (x, y, z) in updates {
+      cells[x][y][z].opposite_neighbors += 1;
     }
 
     Self { cells }
@@ -70,26 +65,21 @@ impl Space {
     self
       .cells
       .iter() // rows
-      .flat_map(|col| col.iter().flat_map(|layer| layer.iter()))
+      .flatten() // cols
+      .flatten() // layers
       .filter(|cell| cell.material == Material::Droplet)
       .map(|droplet| droplet.opposite_neighbors)
       .sum()
   }
   fn connected_positions_same_material(&self, start: [usize; 3]) -> HashSet<[usize; 3]> {
-    let mut stack: Vec<[usize; 3]> = Vec::new();
-    let mut result: HashSet<[usize; 3]> = HashSet::new();
+    let mut stack = vec![start];
+    let mut result = HashSet::new();
     let search_material = self.cells[start[0]][start[1]][start[2]].material;
     stack.push(start);
-    while !stack.is_empty() {
-      let [x, y, z] = stack.pop().expect("stack is empty?");
+    while let Some([x, y, z]) = stack.pop() {
       let cell = self.cells[x][y][z];
-      if cell.material == search_material {
-        result.insert([x, y, z]);
-        for [adj_x, adj_y, adj_z] in Space::all_adjacent_positions([x, y, z]) {
-          if !result.contains(&[adj_x, adj_y, adj_z]) {
-            stack.push([adj_x, adj_y, adj_z]);
-          }
-        }
+      if cell.material == search_material && result.insert([x, y, z]) {
+        stack.extend(Self::all_adjacent_positions([x, y, z]).filter(|pos| !result.contains(pos)));
       }
     }
     result
@@ -98,8 +88,7 @@ impl Space {
     let exterior_air_cells = self.connected_positions_same_material([0, 0, 0]);
     exterior_air_cells
       .iter()
-      .map(|[x, y, z]| &self.cells[*x][*y][*z])
-      .map(|air_block| air_block.opposite_neighbors)
+      .map(|&[x, y, z]| self.cells[x][y][z].opposite_neighbors)
       .sum()
   }
 }
