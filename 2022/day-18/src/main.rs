@@ -2,7 +2,7 @@ use nom::{
   bytes::complete::tag, character::complete::newline, combinator::map, multi::separated_list1,
   IResult, Parser,
 };
-use std::{collections::HashSet, time::Instant};
+use std::{time::Instant};
 
 const L: usize = 22;
 
@@ -26,9 +26,10 @@ impl Space {
       // calculate opposite contact surfaces
       for y in 0..L {
         for z in 0..L {
-          for [adj_x, adj_y, adj_z] in Self::all_adjacent_positions([x, y, z]) {
+          for [adj_x, adj_y, adj_z] in Self::previous_adjacent_positions([x, y, z]) {
             if cells[x][y][z].material != cells[adj_x][adj_y][adj_z].material {
               cells[x][y][z].opposite_neighbors += 1;
+              cells[adj_x][adj_y][adj_z].opposite_neighbors += 1;
             }
           }
         }
@@ -36,6 +37,21 @@ impl Space {
     }
 
     Self { cells }
+  }
+  fn previous_adjacent_positions(position: [usize; 3]) -> impl Iterator<Item = [usize; 3]> {
+    [
+      position[0]
+        .checked_sub(1)
+        .map(|x| [x, position[1], position[2]]),
+      position[1]
+        .checked_sub(1)
+        .map(|y| [position[0], y, position[2]]),
+      position[2]
+        .checked_sub(1)
+        .map(|z| [position[0], position[1], z]),
+    ]
+    .into_iter()
+    .flatten()
   }
   fn all_adjacent_positions(position: [usize; 3]) -> impl Iterator<Item = [usize; 3]> {
     [
@@ -58,31 +74,27 @@ impl Space {
   fn droplet_sides(&self) -> u64 {
     self
       .cells
-      .iter() // rows
-      .flatten() // cols
-      .flatten() // layers
+      .iter()
+      .flatten()
+      .flatten()
       .filter(|cell| cell.material == Material::Droplet)
       .map(|droplet| droplet.opposite_neighbors)
       .sum()
   }
-  fn connected_positions_same_material(&self, start: [usize; 3]) -> HashSet<[usize; 3]> {
-    let mut stack = vec![start];
-    let mut result = HashSet::new();
-    let search_material = self.cells[start[0]][start[1]][start[2]].material;
+  fn exterior_air_sides(&self) -> u64 {
+    let mut stack = vec![[0, 0, 0]]; // assume 0,0,0 is air
+    let mut visited = [[[false; L]; L]; L];
+    let mut sum: u64 = 0;
+    let search_material = Material::Air;
     while let Some([x, y, z]) = stack.pop() {
       let cell = self.cells[x][y][z];
-      if cell.material == search_material && result.insert([x, y, z]) {
-        stack.extend(Self::all_adjacent_positions([x, y, z]).filter(|pos| !result.contains(pos)));
+      if cell.material == search_material && !visited[x][y][z] {
+        visited[x][y][z] = true;
+        sum += cell.opposite_neighbors;
+        stack.extend(Self::all_adjacent_positions([x, y, z]));
       }
     }
-    result
-  }
-  fn exterior_air_sides(&self) -> u64 {
-    let exterior_air_cells = self.connected_positions_same_material([0, 0, 0]);
-    exterior_air_cells
-      .iter()
-      .map(|&[x, y, z]| self.cells[x][y][z].opposite_neighbors)
-      .sum()
+    sum
   }
 }
 
