@@ -2,7 +2,7 @@ use nom::{
   bytes::complete::tag, character::complete::newline, combinator::map, multi::separated_list1,
   IResult, Parser,
 };
-use std::{time::Instant};
+use std::time::Instant;
 
 const L: usize = 22;
 
@@ -16,10 +16,13 @@ struct Space {
 
 impl Space {
   fn from(positions: Vec<Position>) -> Self {
-    let mut cells = [[[Cell::new(Material::Air); L]; L]; L];
+    let mut cells = [[[Cell {
+      opposite_neighbors: 0,
+      material: Material::Air,
+    }; L]; L]; L];
 
     for position in &positions {
-      cells[position.x + 1][position.y + 1][position.z + 1] = Cell::new(Material::Droplet);
+      cells[position.x + 1][position.y + 1][position.z + 1].material = Material::Droplet;
     }
 
     for x in 0..L {
@@ -82,17 +85,19 @@ impl Space {
       .sum()
   }
   fn exterior_air_sides(&self) -> u64 {
-    let mut stack = vec![[0, 0, 0]]; // assume 0,0,0 is air
+    let mut stack = Vec::with_capacity(25000);
+    stack.push([0, 0, 0]); // assume 0,0,0 is air
     let mut visited = [[[false; L]; L]; L];
     let mut sum: u64 = 0;
-    let search_material = Material::Air;
+
     while let Some([x, y, z]) = stack.pop() {
-      let cell = self.cells[x][y][z];
-      if cell.material == search_material && !visited[x][y][z] {
-        visited[x][y][z] = true;
-        sum += cell.opposite_neighbors;
-        stack.extend(Self::all_adjacent_positions([x, y, z]));
+      let cell = &self.cells[x][y][z];
+      if visited[x][y][z] || cell.material != Material::Air {
+        continue;
       }
+      visited[x][y][z] = true;
+      sum += cell.opposite_neighbors;
+      stack.extend(Self::all_adjacent_positions([x, y, z]));
     }
     sum
   }
@@ -104,6 +109,7 @@ enum Material {
   Air,
 }
 
+#[derive(Clone, Copy)]
 struct Position {
   x: usize,
   y: usize,
@@ -114,15 +120,6 @@ struct Position {
 struct Cell {
   opposite_neighbors: u64,
   material: Material,
-}
-
-impl Cell {
-  fn new(material: Material) -> Self {
-    Self {
-      opposite_neighbors: 0,
-      material,
-    }
-  }
 }
 
 fn positions(input: &str) -> IResult<&str, Vec<Position>> {
