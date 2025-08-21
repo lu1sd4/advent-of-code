@@ -6,9 +6,9 @@ use nom::{
   sequence::{delimited, preceded},
   IResult, Parser,
 };
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ResourceCount {
   ore: u32,
   clay: u32,
@@ -96,7 +96,7 @@ impl Blueprint {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct State {
   geodes: u32,
   resources: ResourceCount,
@@ -104,6 +104,7 @@ struct State {
   obsidian_robots: u32,
   clay_robots: u32,
   ore_robots: u32,
+  time: u32,
 }
 
 impl State {
@@ -115,6 +116,7 @@ impl State {
       obsidian_robots: 0,
       clay_robots: 0,
       ore_robots: 1,
+      time: 0
     }
   }
 
@@ -171,6 +173,7 @@ impl State {
     self.resources.ore += self.ore_robots;
     self.resources.clay += self.clay_robots;
     self.resources.obsidian += self.obsidian_robots;
+    self.time += 1;
   }
 
   fn with_collected_resources(&self) -> Self {
@@ -185,13 +188,15 @@ impl State {
       clay_robots: self.clay_robots,
       obsidian_robots: self.obsidian_robots,
       geode_robots: self.geode_robots,
+      time: self.time + 1,
     }
   }
 }
 
 fn max_geodes(state: State, minutes_remaining: u32, blueprint: &Blueprint) -> u32 {
   let mut max_seen: u32 = 0;
-  depth_first_search(state, &mut max_seen, minutes_remaining, blueprint)
+  let mut cache = HashMap::new();
+  depth_first_search(state, &mut max_seen, minutes_remaining, blueprint, &mut cache)
 }
 
 fn depth_first_search(
@@ -199,7 +204,12 @@ fn depth_first_search(
   max_seen: &mut u32,
   minutes_remaining: u32,
   blueprint: &Blueprint,
+  cache: &mut HashMap<State, u32>
 ) -> u32 {
+  if let Some(&cached) = cache.get(&state) {
+    return cached;
+  }
+
   if minutes_remaining <= 0 {
     return state.geodes;
   }
@@ -209,37 +219,39 @@ fn depth_first_search(
   }
 
   if let Some(new_state) = state.try_build_geode_robot(&blueprint.geode_robot_cost) {
-    let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint);
+    let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
     *max_seen = (*max_seen).max(next_geodes);
     return *max_seen;
   }
 
   if let Some(new_state) = state.try_build_ore_robot(&blueprint.ore_robot_cost) {
     if blueprint.need_ore_robots(state.ore_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint);
+      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   if let Some(new_state) = state.try_build_clay_robot(&blueprint.clay_robot_cost) {
     if blueprint.need_clay_robots(state.clay_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint);
+      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   if let Some(new_state) = state.try_build_obsidian_robot(&blueprint.obsidian_robot_cost) {
     if blueprint.need_obsidian_robots(state.obsidian_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint);
+      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   let next_state = state.with_collected_resources();
 
-  let next_geodes = depth_first_search(next_state, max_seen, minutes_remaining - 1, blueprint);
+  let next_geodes = depth_first_search(next_state, max_seen, minutes_remaining - 1, blueprint, cache);
 
   *max_seen = (*max_seen).max(next_geodes);
+
+  cache.insert(state, *max_seen);
 
   return *max_seen;
 }
