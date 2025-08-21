@@ -16,57 +16,52 @@ struct ResourceCount {
 }
 
 impl ResourceCount {
-  fn for_ore_robot(ore_cost: u32) -> Self {
+  const fn for_ore_robot(ore_cost: u32) -> Self {
     Self {
       ore: ore_cost,
       clay: 0,
       obsidian: 0,
     }
   }
-  fn for_clay_robot(ore_cost: u32) -> Self {
+
+  const fn for_clay_robot(ore_cost: u32) -> Self {
     Self {
       ore: ore_cost,
       clay: 0,
       obsidian: 0,
     }
   }
-  fn for_obsidian_robot(ore_cost: u32, clay_cost: u32) -> Self {
+
+  const fn for_obsidian_robot(ore_cost: u32, clay_cost: u32) -> Self {
     Self {
       ore: ore_cost,
       clay: clay_cost,
       obsidian: 0,
     }
   }
-  fn for_geode_robot(ore_cost: u32, obsidian_cost: u32) -> Self {
+
+  const fn for_geode_robot(ore_cost: u32, obsidian_cost: u32) -> Self {
     Self {
       ore: ore_cost,
       clay: 0,
       obsidian: obsidian_cost,
     }
   }
-  fn all_zeros() -> Self {
+
+  const fn all_zeros() -> Self {
     Self {
       ore: 0,
       clay: 0,
       obsidian: 0,
     }
   }
-}
 
-impl ResourceCount {
   fn checked_sub(&self, other: &Self) -> Option<Self> {
-    match (
-      self.ore.checked_sub(other.ore),
-      self.clay.checked_sub(other.clay),
-      self.obsidian.checked_sub(other.obsidian),
-    ) {
-      (Some(new_ore), Some(new_clay), Some(new_obsidian)) => Some(Self {
-        ore: new_ore,
-        clay: new_clay,
-        obsidian: new_obsidian,
-      }),
-      _ => None,
-    }
+    Some(Self {
+      ore: self.ore.checked_sub(other.ore)?,
+      clay: self.clay.checked_sub(other.clay)?,
+      obsidian: self.obsidian.checked_sub(other.obsidian)?,
+    })
   }
 }
 
@@ -88,9 +83,11 @@ impl Blueprint {
       .max(self.geode_robot_cost.ore);
     robots < max_ore_needed
   }
+
   fn need_clay_robots(&self, robots: u32) -> bool {
     robots < self.obsidian_robot_cost.clay
   }
+
   fn need_obsidian_robots(&self, robots: u32) -> bool {
     robots < self.geode_robot_cost.obsidian
   }
@@ -108,7 +105,7 @@ struct State {
 }
 
 impl State {
-  fn initial() -> Self {
+  const fn initial() -> Self {
     Self {
       geodes: 0,
       resources: ResourceCount::all_zeros(),
@@ -116,56 +113,44 @@ impl State {
       obsidian_robots: 0,
       clay_robots: 0,
       ore_robots: 1,
-      time: 0
+      time: 0,
     }
   }
 
   fn try_build_ore_robot(&self, robot_cost: &ResourceCount) -> Option<Self> {
-    if let Some(remaining_resources) = self.resources.checked_sub(robot_cost) {
-      let mut new_state = *self;
-      new_state.resources = remaining_resources;
-      new_state.collect_resources();
-      new_state.ore_robots += 1;
-      Some(new_state)
-    } else {
-      None
-    }
+    let remaining_resources = self.resources.checked_sub(robot_cost)?;
+    let mut new_state = *self;
+    new_state.resources = remaining_resources;
+    new_state.collect_resources();
+    new_state.ore_robots += 1;
+    Some(new_state)
   }
 
   fn try_build_clay_robot(&self, robot_cost: &ResourceCount) -> Option<Self> {
-    if let Some(remaining_resources) = self.resources.checked_sub(robot_cost) {
-      let mut new_state = *self;
-      new_state.resources = remaining_resources;
-      new_state.collect_resources();
-      new_state.clay_robots += 1;
-      Some(new_state)
-    } else {
-      None
-    }
+    let remaining_resources = self.resources.checked_sub(robot_cost)?;
+    let mut new_state = *self;
+    new_state.resources = remaining_resources;
+    new_state.collect_resources();
+    new_state.clay_robots += 1;
+    Some(new_state)
   }
 
   fn try_build_obsidian_robot(&self, robot_cost: &ResourceCount) -> Option<Self> {
-    if let Some(remaining_resources) = self.resources.checked_sub(robot_cost) {
-      let mut new_state = *self;
-      new_state.resources = remaining_resources;
-      new_state.collect_resources();
-      new_state.obsidian_robots += 1;
-      Some(new_state)
-    } else {
-      None
-    }
+    let remaining_resources = self.resources.checked_sub(robot_cost)?;
+    let mut new_state = *self;
+    new_state.resources = remaining_resources;
+    new_state.collect_resources();
+    new_state.obsidian_robots += 1;
+    Some(new_state)
   }
 
   fn try_build_geode_robot(&self, robot_cost: &ResourceCount) -> Option<Self> {
-    if let Some(remaining_resources) = self.resources.checked_sub(robot_cost) {
-      let mut new_state = *self;
-      new_state.resources = remaining_resources;
-      new_state.collect_resources();
-      new_state.geode_robots += 1;
-      Some(new_state)
-    } else {
-      None
-    }
+    let remaining_resources = self.resources.checked_sub(robot_cost)?;
+    let mut new_state = *self;
+    new_state.resources = remaining_resources;
+    new_state.collect_resources();
+    new_state.geode_robots += 1;
+    Some(new_state)
   }
 
   fn collect_resources(&mut self) {
@@ -194,9 +179,15 @@ impl State {
 }
 
 fn max_geodes(state: State, minutes_remaining: u32, blueprint: &Blueprint) -> u32 {
-  let mut max_seen: u32 = 0;
+  let mut max_seen = 0;
   let mut cache = HashMap::new();
-  depth_first_search(state, &mut max_seen, minutes_remaining, blueprint, &mut cache)
+  depth_first_search(
+    state,
+    &mut max_seen,
+    minutes_remaining,
+    blueprint,
+    &mut cache,
+  )
 }
 
 fn depth_first_search(
@@ -204,56 +195,70 @@ fn depth_first_search(
   max_seen: &mut u32,
   minutes_remaining: u32,
   blueprint: &Blueprint,
-  cache: &mut HashMap<State, u32>
+  cache: &mut HashMap<State, u32>,
 ) -> u32 {
   if let Some(&cached) = cache.get(&state) {
     return cached;
   }
 
-  if minutes_remaining <= 0 {
+  if minutes_remaining == 0 {
     return state.geodes;
   }
 
-  if state.geodes + minutes_remaining * state.geode_robots + minutes_remaining * (minutes_remaining - 1) / 2 <= *max_seen {
+  if state.geodes
+    + minutes_remaining * state.geode_robots
+    + minutes_remaining * (minutes_remaining - 1) / 2
+    <= *max_seen
+  {
     return *max_seen;
   }
 
   if let Some(new_state) = state.try_build_geode_robot(&blueprint.geode_robot_cost) {
-    let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
+    let next_geodes =
+      depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
     *max_seen = (*max_seen).max(next_geodes);
     return *max_seen;
   }
 
   if let Some(new_state) = state.try_build_ore_robot(&blueprint.ore_robot_cost) {
     if blueprint.need_ore_robots(state.ore_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
+      let next_geodes =
+        depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   if let Some(new_state) = state.try_build_clay_robot(&blueprint.clay_robot_cost) {
     if blueprint.need_clay_robots(state.clay_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
+      let next_geodes =
+        depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   if let Some(new_state) = state.try_build_obsidian_robot(&blueprint.obsidian_robot_cost) {
     if blueprint.need_obsidian_robots(state.obsidian_robots) {
-      let next_geodes = depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
+      let next_geodes =
+        depth_first_search(new_state, max_seen, minutes_remaining - 1, blueprint, cache);
       *max_seen = (*max_seen).max(next_geodes);
     }
   }
 
   let next_state = state.with_collected_resources();
 
-  let next_geodes = depth_first_search(next_state, max_seen, minutes_remaining - 1, blueprint, cache);
+  let next_geodes = depth_first_search(
+    next_state,
+    max_seen,
+    minutes_remaining - 1,
+    blueprint,
+    cache,
+  );
 
   *max_seen = (*max_seen).max(next_geodes);
 
   cache.insert(state, *max_seen);
 
-  return *max_seen;
+  *max_seen
 }
 
 fn blueprint(input: &str) -> IResult<&str, Blueprint> {
@@ -302,7 +307,9 @@ fn part_one(input: &str) -> u32 {
   blueprints
     .into_iter()
     .enumerate()
-    .map(|(i, blueprint)| ((i as u32) + 1) * max_geodes(State::initial(), minutes, &blueprint)) // slow ~6s
+    .map(|(i, blueprint)| {
+      (u32::try_from(i).unwrap() + 1) * max_geodes(State::initial(), minutes, &blueprint)
+    })
     .sum()
 }
 
@@ -312,7 +319,7 @@ fn part_two(input: &str) -> u32 {
   blueprints
     .into_iter()
     .take(3)
-    .map(|blueprint| max_geodes(State::initial(), minutes, &blueprint)) // slooooooow ~40s
+    .map(|blueprint| max_geodes(State::initial(), minutes, &blueprint))
     .product()
 }
 
