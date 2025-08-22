@@ -33,7 +33,6 @@ fn decode_signal(numbers: &Vec<i64>, n_mixes: usize, key: i64) -> i64 {
     .skip(zero_pos + 1000)
     .step_by(1000)
     .take(3)
-    .copied()
     .sum()
 }
 
