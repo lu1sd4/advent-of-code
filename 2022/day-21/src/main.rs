@@ -177,10 +177,7 @@ impl Riddle {
       .iter()
       .map(|name| self.monkeys.get(name).unwrap())
       .for_each(|m| {
-        result.insert(
-          m.name.clone(),
-          m.clone(),
-        );
+        result.insert(m.name.clone(), m.clone());
       });
     Self { monkeys: result }
   }
